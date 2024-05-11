@@ -1,12 +1,10 @@
 streamlit
-unstructured
 langchain
-fastapi
 langchain_google_genai
 langserve
-uvicorn
 python-dotenv
 sentence-transformers
 playwright
 selenium
 webdriver-manager
+faiss-cpu

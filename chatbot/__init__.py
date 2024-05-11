@@ -19,6 +19,9 @@ class CreateChatBot:
     
     def __init__(self, url: str, google_api_key: str):
         print(f'CreateChatBot: {url}, {google_api_key}')
+
+        self.current_status = "idle"
+
         self.url = url
 
         self.retriever = self.read_website() 
