@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.document_loaders import TextLoader
+from langchain.document_loaders import UnstructuredHTMLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -15,10 +15,9 @@ from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 
 
-class CreateChatBot:
+class SingleWebPage:
     
     def __init__(self, url: str, google_api_key: str):
-        print(f'CreateChatBot: {url}, {google_api_key}')
 
         self.current_status = "idle"
 
@@ -41,7 +40,6 @@ class CreateChatBot:
 
     
     def read_website(self):
-        print('read_website')
         
         options = Options()
 
@@ -55,14 +53,14 @@ class CreateChatBot:
         # get body text
         elem = driver.find_element(By.TAG_NAME, 'body')
 
-        text = elem.text
+        text = driver.page_source
 
-        with open("text.txt", "w") as file:
+        with open("page.html", "w") as file:
             file.write(text)
 
         driver.close()
 
-        loader = TextLoader('text.txt')
+        loader = UnstructuredHTMLLoader('page.html')
 
         # Split the text
         text_documents = loader.load()
