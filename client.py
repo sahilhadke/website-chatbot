@@ -1,36 +1,29 @@
 import streamlit as st
 from rag import SingleWebPage
-import os
 from dotenv import load_dotenv
 from streamlit.components.v1 import html
 
 load_dotenv('.env')
 
-def main():
-    st.title('Website RAG')
+if 'data_load' not in st.session_state:
+    st.session_state['data_load'] = False
 
-    website_url = st.text_input('Enter URL')
-    question = st.text_area('Enter your question')
-    api_key = st.text_input('Enter API Key')
-    progress_text = st.empty()
+if 'chatbot' not in st.session_state:
+    st.session_state['chatbot'] = None
 
-    if(st.button('Get Answer')):
+st.title("Website RAG")
 
-        if(api_key == ''):
-            st.error('Please enter a valid API Key')
-            return
-        if(website_url == ''):
-            st.error('Please enter a valid URL')
-            return
-        if(question == ''):
-            st.error('Please enter a valid question')
-            return
+# website and api key input fields
+website_url = st.text_input("Enter website URL")
+api_key = st.text_input("Enter Google API Key")
 
-        progress_text.write(f'Fetching data from {website_url} and storing to vectordb')
-        chatbot = SingleWebPage(website_url, api_key)
-        progress_text.write(f'Using LLM to query the vectordb for the question: {question}')
-        response = chatbot.get_response(question)
-        progress_text.write(f'Answer: {response}')
+if(st.button("Load")):
+    st.session_state['chatbot'] = SingleWebPage(website_url, api_key)
+    st.session_state['data_load'] = True
+    st.success("Data loaded successfully")
 
-if __name__ == '__main__':
-    main()
+if(st.session_state['data_load']):
+    question = st.text_input("Enter question")
+    if(st.button("Get Answer")):
+        response = st.session_state['chatbot'].get_response(question)
+        st.write(response)
