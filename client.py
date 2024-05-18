@@ -1,5 +1,5 @@
 import streamlit as st
-from rag import SingleWebPage
+from rag import RAG
 from dotenv import load_dotenv
 from streamlit.components.v1 import html
 
@@ -13,6 +13,7 @@ st.title("Resource Augmented Generation (RAG)")
 
 # Dropdown to choose the type of RAG
 resource_type = st.selectbox(
+    
     "Select Resource Type",
     ("Website Single Page", "Website Multiple Pages", "PDF File", "DOC File", "CSV File")
 )
@@ -22,7 +23,7 @@ if resource_type == "Website Single Page" or resource_type == "Website Multiple 
     website_url = st.text_input("Enter website URL")
     api_key = st.text_input("Enter Google API Key")
     if st.button("Load Website"):
-        st.session_state['resource_processor'] = SingleWebPage(website_url, api_key)
+        st.session_state['resource_processor'] = RAG(website_url, api_key)
         st.session_state['data_loaded'] = True
         st.success("Website data loaded successfully")
 
