@@ -4,8 +4,6 @@ from selenium.webdriver.common.by import By
 from langchain_core.documents import Document
 from urllib.parse import urlparse
 from langchain.document_loaders import UnstructuredHTMLLoader
-from bs4 import BeautifulSoup
-import torch
 
 def are_urls_same(url1, url2):
     # normalize urls
@@ -69,13 +67,3 @@ def scrape_site(driver, url, visited=None, count:int=2, write_function=None):
 
             data.extend(scrape_site(driver, href, visited, count, write_function=write_function))
     return data
-
-def html_to_text(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
-    return soup.get_text()
-
-def embed_text(text):
-    inputs = tokenizer(text, return_tensors='pt', padding=True, truncation=True)
-    with torch.no_grad():
-        embeddings = model(**inputs).last_hidden_state.mean(dim=1)
-    return embeddings.numpy()
