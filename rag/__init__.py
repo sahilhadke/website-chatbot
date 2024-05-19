@@ -1,52 +1,43 @@
-import os
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.document_loaders import UnstructuredHTMLLoader
-from langchain.docstore.document import Document
+from langchain.document_loaders import UnstructuredHTMLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import create_retrieval_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
-import faiss
-
-import logging
-
-
-
+from langchain_core.documents import Document
 
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.by import By
 
 from utils import scrape_site
-from transformers import AutoTokenizer, AutoModel
-from bs4 import BeautifulSoup
-import torch
-
-import numpy as np
-
-
-# Enable logging for debugging
-logging.basicConfig(level=logging.INFO)
 
 class RAG:
     
-    def __init__(self, url: str, google_api_key: str, resource_type: str="Website Single Page", recursive_count: int=5):
+    def __init__(self, url: str, google_api_key: str, resource_type: str="Website Single Page", recursive_count: int=5, write_function=None):
 
-        self.current_status = "idle"
+        if(write_function is None):
+            self.write_function = print
+        else:
+            self.write_function = write_function
 
-        self.recursive_count = recursive_count
+        self.write_function("Initializing RAG...")
 
         self.url = url
 
-        if(resource_type == "Website Single Page"):
-            self.retriever = self.read_website() 
+        try:
+            if(resource_type == "Website Single Page"):
+                self.retriever = self.read_website() 
+        except Exception as e:
+            self.write_function(f"Failed to read website: {e}")
+            raise
 
         if(resource_type == "Website Multiple Pages"):
-            self.retriever = self.read_website_recursive()
+            self.retriever = self.read_website_recursive(recursive_count)
 
+        self.write_function("Initializing LLM...")
         llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=google_api_key)
 
         prompt = ChatPromptTemplate.from_template("""
@@ -58,11 +49,13 @@ class RAG:
         Question: {input}                                                                                                                 
         """)
 
+        self.write_function("Creating document chain...")
         self.document_chain = create_stuff_documents_chain(llm, prompt)
 
     
     def read_website(self):
         
+        self.write_function("Reading website...")
         options = Options()
 
         options.add_argument('--headless')
@@ -73,31 +66,27 @@ class RAG:
         driver.get(self.url)
 
         text_html = driver.page_source
-        
-        # extract body text
-        text = driver.find_element(By.TAG_NAME, "body").text
 
-        with open("page.html", "w") as file:
-            file.write(text_html)
+        with open('page.html', 'w') as f:
+            f.write(text_html)
 
         driver.close()
 
         loader = UnstructuredHTMLLoader('page.html')
         # load the text from variable
-        # loader = Document(page_content=text, metadata={"source": self.url})
 
         # Split the text
         text_documents = loader.load()
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         documents = text_splitter.split_documents(text_documents)
 
         # documents = [Document(page_content="Raymond Brownell was a senior officer in the Royal Australian Air Force and a World War I flying ace", metadata={"source": "https://en.wikipedia.org/wiki/Raymond_Brownell"})]
 
+        self.write_function("Storing content in vector store...")
+
         # Create and fill the FAISS index
-        try:
-            embedder = HuggingFaceEmbeddings()
-        except Exception as e:
-            logging.error(f"Failed to initialize embeddings model: {e}")
+        embedder = HuggingFaceEmbeddings()
         
         db = FAISS.from_documents(documents, embedder)
 
@@ -105,64 +94,39 @@ class RAG:
         retriever = db.as_retriever()
         # faiss.write_index(retriever.index, "index.faiss")
         # print(f'retriever = {retriever}')
+        self.write_function("Content stored in vector store.")
         return retriever
     
-    def read_website_recursive(self):
+    def read_website_recursive(self, recursive_count):
         
+        self.write_function("Reading website recursively...")
         options = Options()
         options.add_argument('--headless')
         driver = webdriver.Firefox(options=options)
 
 
-        data = scrape_site(driver, self.url)
+        text_documents = scrape_site(driver, self.url, count=recursive_count, write_function=self.write_function)
         # print(f'data = {data}')
 
-        def html_to_text(html_content):
-            soup = BeautifulSoup(html_content, 'html.parser')
-            return soup.get_text()
+        self.write_function('Storing content in vector store...')
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        documents = text_splitter.split_documents(text_documents)
 
-
-        documents = []
-        for url, html_content in data.items():
-            for url, html_content in data.items():
-                text_content = html_to_text(html_content)
-                doc = Document(page_content=text_content, metadata={"source": url})
-                documents.append(doc)
-
-
-        try:
-            logging.info("Initializing HuggingFace Embeddings model...")      
-            embeddings_model = HuggingFaceEmbeddings(force_download=True)
-            logging.info("Model initialized successfully.")
-        except Exception as e:
-            logging.error(f"Failed to initialize embeddings model: {e}")
-            raise
-        # Initialize the HuggingFace Embeddings
-
-        # Convert documents to embeddings
-        texts = [doc.text for doc in documents]
-        embeddings = embeddings_model.embed_documents(texts)
-
-        # Create a FAISS index and add embeddings
-        dimension = embeddings.shape[1]
-        index = faiss.IndexFlatL2(dimension)
-        index.add(embeddings)
-
-        metadata = list(data.keys())
-        with open('metadata.txt', 'w') as f:
-            for item in metadata:
-                f.write(f"{item}\n")
-
-        faiss_retriever = FAISS(index=index, metadata=metadata, embeddings=embeddings_model)
-
-        return faiss_retriever
-
+        # Create and fill the FAISS index
+        embedder = HuggingFaceEmbeddings()
         
-        
-        
+        db = FAISS.from_documents(documents, embedder)
+        # db.save_local("winoen_index")
 
+        # Setup the retriever
+        retriever = db.as_retriever()
+        return retriever
+     
     def get_response(self, question: str):
+
+        self.write_function("Creating retrieval chain and getting response from LLM...")
         retrieval_chain = create_retrieval_chain(self.retriever, self.document_chain)
         result = retrieval_chain.invoke({"input": question})
+        self.write_function(f"Answer: {result['answer']}" )
         # print(f'get_response = {question}, {result}')
         return result['answer']

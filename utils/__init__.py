@@ -1,7 +1,9 @@
 
 import time
 from selenium.webdriver.common.by import By
+from langchain_core.documents import Document
 from urllib.parse import urlparse
+from langchain.document_loaders import UnstructuredHTMLLoader
 from bs4 import BeautifulSoup
 import torch
 
@@ -27,8 +29,14 @@ def url_exists_in_set(visited, url):
         
     return False
 
-def scrape_site(driver, url, visited=None, count:int=2):
+# return document
+def scrape_site(driver, url, visited=None, count:int=2, write_function=None):
 
+    if(write_function is None):
+        write_function = print
+    
+    write_function(f"Scraping: {url}")
+    
     # normalize url
     url = url.split('#')[0].split('?')[0]
     url = url.replace('www.', '')
@@ -37,22 +45,29 @@ def scrape_site(driver, url, visited=None, count:int=2):
         visited = set()
     if url in visited:
         return []
-    print(f"Visiting: {url}")
+    print(f"Visiting: {url} + visited Len = {len(visited)}")
     visited.add(url)
     driver.get(url)
     time.sleep(2)  # Adjust timing based on the website's response time
     content = driver.page_source
+
+    with open('page.html', 'w') as f:
+        f.write(content)
+
+    loader = UnstructuredHTMLLoader('page.html')
+    text_documents = loader.load()
+
     links = driver.find_elements(By.TAG_NAME, 'a')
     links_hrefs = [link.get_attribute('href') for link in links]
-    data = {}
-    data[str(url)] = str(content)
+    data = []
+    temp_document = Document(page_content=text_documents[0].page_content, metadata={"source": url})
+    data.append(temp_document)
     for href in links_hrefs:
         if href and not url_exists_in_set(visited, href):
             if(len(visited) >= count):
                 break # Stop scraping after visiting max_pages
 
-            data = {**data, **scrape_site(driver, href, visited, count)}
-            # data.extend(scrape_site(driver, href, visited))
+            data.extend(scrape_site(driver, href, visited, count, write_function=write_function))
     return data
 
 def html_to_text(html_content):
