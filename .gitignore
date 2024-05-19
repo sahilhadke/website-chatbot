@@ -3,3 +3,4 @@ venv
 indexes
 playground.py
 .devcontainer
+indexes/
