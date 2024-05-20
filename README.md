@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 3. Run the application:
 ```
-streamlit run app.py
+streamlit run client.py
 ```
 
 ## Usage
